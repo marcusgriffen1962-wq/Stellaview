@@ -24,14 +24,17 @@ import {
   Thermometer,
   Upload,
   Wifi,
+  Workflow,
   X,
   Zap,
   type LucideIcon,
 } from 'lucide-react';
+import AgentsLayout from './AgentsLayout';
 import RingGauge from './RingGauge';
 import Sparkline from './Sparkline';
 import { formatBytes, formatClock, formatSpeed, formatUptime } from '@/lib/format';
-import type { SystemSnapshot } from '@/lib/types';
+import { createDemoAgents, createDemoLayout } from '@/lib/demo';
+import type { AgentsSnapshot, LayoutSnapshot, SystemSnapshot } from '@/lib/types';
 
 const EMPTY_SNAPSHOT: SystemSnapshot = {
   timestamp: 0,
@@ -53,6 +56,7 @@ const EMPTY_SNAPSHOT: SystemSnapshot = {
 
 const NAV_ITEMS: { id: string; label: string; icon: LucideIcon }[] = [
   { id: 'overview', label: 'Overview', icon: LayoutDashboard },
+  { id: 'agents', label: 'Agents & Layout', icon: Workflow },
   { id: 'hardware', label: 'Hardware', icon: Cpu },
   { id: 'network', label: 'Network & Downloads', icon: Network },
   { id: 'storage', label: 'Storage', icon: HardDrive },
@@ -174,6 +178,9 @@ function SectionHeading({ id, title, kicker, onRefresh, refreshing }: {
 
 export default function Dashboard() {
   const [snapshot, setSnapshot] = useState<SystemSnapshot>(EMPTY_SNAPSHOT);
+  const [agents, setAgents] = useState<AgentsSnapshot>(() => createDemoAgents());
+  const [layout, setLayout] = useState<LayoutSnapshot>(() => createDemoLayout());
+  const [activityRefreshing, setActivityRefreshing] = useState(false);
   const [history, setHistory] = useState({ cpu: [0, 0], memory: [0, 0], down: [0, 0], up: [0, 0] });
   const [activeNav, setActiveNav] = useState('overview');
   const [refreshing, setRefreshing] = useState(false);
@@ -207,6 +214,24 @@ export default function Dashboard() {
     }));
   }, []);
 
+  const refreshActivity = useCallback(async () => {
+    if (typeof window !== 'undefined' && window.electronAPI) {
+      try {
+        const [nextAgents, nextLayout] = await Promise.all([
+          window.electronAPI.getAgents(),
+          window.electronAPI.getLayout(),
+        ]);
+        setAgents(nextAgents);
+        setLayout(nextLayout);
+        return;
+      } catch {
+        // Fall through to demo data if the desktop bridge is not ready.
+      }
+    }
+    setAgents(createDemoAgents());
+    setLayout(createDemoLayout());
+  }, []);
+
   useEffect(() => {
     let mounted = true;
     if (window.electronAPI) {
@@ -226,15 +251,24 @@ export default function Dashboard() {
       await refresh();
       if (mounted) setRefreshing(false);
     };
+    const runActivity = async () => {
+      if (!mounted) return;
+      setActivityRefreshing(true);
+      await refreshActivity();
+      if (mounted) setActivityRefreshing(false);
+    };
     void run();
+    void runActivity();
     const poll = window.setInterval(() => void run(), 2000);
+    const activityPoll = window.setInterval(() => void runActivity(), 5000);
     const tick = window.setInterval(() => setClock(new Date()), 1000);
     return () => {
       mounted = false;
       window.clearInterval(poll);
+      window.clearInterval(activityPoll);
       window.clearInterval(tick);
     };
-  }, [refresh]);
+  }, [refresh, refreshActivity]);
 
   const changeAwake = useCallback(async (enabled: boolean) => {
     if (!window.electronAPI) {
@@ -384,6 +418,15 @@ export default function Dashboard() {
               </button>
             </div>
           )}
+
+          <AgentsLayout
+            snapshot={snapshot}
+            agents={agents}
+            layout={layout}
+            isDemo={isDemo}
+            refreshing={activityRefreshing}
+            onRefresh={() => void refreshActivity()}
+          />
 
           <SectionHeading
             id="overview"

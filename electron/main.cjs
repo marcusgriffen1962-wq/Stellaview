@@ -4,6 +4,8 @@ const { app, BrowserWindow, ipcMain, powerSaveBlocker, screen, shell } = require
 const { spawn } = require('node:child_process');
 const path = require('node:path');
 const { createSnapshot } = require('./system.cjs');
+const { getAgentsSnapshot } = require('./agents.cjs');
+const { getLayoutSnapshot } = require('./layout.cjs');
 const { startStaticServer } = require('./server.cjs');
 
 const isDev = process.env.STELLAVIEW_DEV === '1';
@@ -142,6 +144,8 @@ function setAwake(enabled) {
 
 function registerIpcHandlers() {
   ipcMain.handle('system:snapshot', () => createSnapshot(getDisplayInfo()));
+  ipcMain.handle('agents:snapshot', () => getAgentsSnapshot());
+  ipcMain.handle('layout:snapshot', () => getLayoutSnapshot());
   ipcMain.handle('power:get', isAwake);
   ipcMain.handle('power:set', (_event, enabled) => setAwake(Boolean(enabled)));
 

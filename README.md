@@ -13,9 +13,12 @@ Your logo is used as the app icon, the window/taskbar icon, the sidebar brand ma
 - **Thermal & fans** — temperature sensors and fan RPM where the hardware exposes them
 - **Hardware** — GPU, motherboard, BIOS, kernel, architecture, display, battery
 - **Processes** — top CPU consumers
+- **Agents & layout** — Orca/OpenCode agent sessions, worktrees, hardware topology, per-core thread map, desktop windows/workspaces, disk I/O and socket owners
 - **Keep-awake switch** — uses the OS power-save blocker to prevent sleep while a task is running, with a “Mark task finished” button to release it
 
-Readings refresh every two seconds. All telemetry is collected locally; Stellaview has no cloud services.
+System telemetry refreshes every two seconds. Agent and layout data refreshes every five seconds. All telemetry is collected locally; Stellaview has no cloud services.
+
+> **Agents & layout note:** Stellaview reads local Orca state with `orca agent list --json` and `orca worktree ps --json`. It uses `/proc`, `ps` and X11/EWMH on Linux for process-to-core and window mapping. When Orca is not running, the dashboard clearly marks agent data as unavailable rather than showing stale sessions as live.
 
 > **Keep-awake note:** The lock is active only while Stellaview is running. Closing the app releases it automatically. It is not restored on the next launch, so your computer cannot be left awake indefinitely by accident.
 
