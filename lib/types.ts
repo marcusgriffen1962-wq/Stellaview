@@ -95,6 +95,8 @@ declare global {
     electronAPI?: {
       getSnapshot: () => Promise<SystemSnapshot>;
       platform: 'linux' | 'win32' | 'darwin';
+      getAwakeState: () => Promise<boolean>;
+      setAwake: (enabled: boolean) => Promise<boolean>;
       windowControls: {
         minimize: () => void;
         maximize: () => void;

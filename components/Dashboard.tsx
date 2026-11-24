@@ -25,6 +25,7 @@ import {
   Upload,
   Wifi,
   X,
+  Zap,
   type LucideIcon,
 } from 'lucide-react';
 import RingGauge from './RingGauge';
@@ -179,6 +180,8 @@ export default function Dashboard() {
   const [isDemo, setIsDemo] = useState(true);
   const [clock, setClock] = useState<Date | null>(null);
   const [platform, setPlatform] = useState<'linux' | 'win32' | 'darwin' | 'browser'>('browser');
+  const [keepAwake, setKeepAwake] = useState(false);
+  const [awakePending, setAwakePending] = useState(false);
 
   const refresh = useCallback(async () => {
     let next: SystemSnapshot;
@@ -206,7 +209,17 @@ export default function Dashboard() {
 
   useEffect(() => {
     let mounted = true;
-    if (window.electronAPI) setPlatform(window.electronAPI.platform);
+    if (window.electronAPI) {
+      setPlatform(window.electronAPI.platform);
+      window.electronAPI
+        .getAwakeState()
+        .then((active) => {
+          if (mounted) setKeepAwake(active);
+        })
+        .catch(() => {
+          // Keep the UI responsive if the main process is not ready yet.
+        });
+    }
     const run = async () => {
       if (!mounted) return;
       setRefreshing(true);
@@ -222,6 +235,22 @@ export default function Dashboard() {
       window.clearInterval(tick);
     };
   }, [refresh]);
+
+  const changeAwake = useCallback(async (enabled: boolean) => {
+    if (!window.electronAPI) {
+      setKeepAwake(enabled);
+      return;
+    }
+    setAwakePending(true);
+    try {
+      const active = await window.electronAPI.setAwake(enabled);
+      setKeepAwake(active);
+    } catch {
+      // Leave the previous state in place if the OS call fails.
+    } finally {
+      setAwakePending(false);
+    }
+  }, []);
 
   const greeting = (() => {
     const hour = new Date().getHours();
@@ -267,6 +296,12 @@ export default function Dashboard() {
         </nav>
 
         <div className="sidebar-footer">
+          {keepAwake && (
+            <div className="status-line awake-status">
+              <span className="live-dot awake" />
+              Awake lock active
+            </div>
+          )}
           <div className="status-line">
             <span className="live-dot" />
             {isDemo ? 'Sample data' : 'Live telemetry'}
@@ -289,6 +324,19 @@ export default function Dashboard() {
             </div>
           </div>
           <div className="titlebar-right">
+            <button
+              className={`awake-toggle${keepAwake ? ' active' : ''}`}
+              onClick={() => void changeAwake(!keepAwake)}
+              disabled={awakePending}
+              aria-pressed={keepAwake}
+              title={keepAwake ? 'Computer will stay awake until you turn this off' : 'Prevent computer sleep while a task runs'}
+            >
+              <Zap size={12} />
+              <span>Keep awake</span>
+              <span className="switch" aria-hidden="true">
+                <span className="switch-knob" />
+              </span>
+            </button>
             <span className="clock">{clock ? formatClock(clock) : '--:--:--'}</span>
             <div className="window-controls">
               <button className="window-btn" aria-label="Minimize" onClick={() => window.electronAPI?.windowControls.minimize()}>
@@ -324,6 +372,16 @@ export default function Dashboard() {
             <div className="notice">
               <Info size={15} />
               Desktop bridge unavailable — displaying sample readings. Launch Stellaview from its desktop shortcut for live system data.
+            </div>
+          )}
+
+          {keepAwake && (
+            <div className="notice awake-notice">
+              <Zap size={15} />
+              <span>Keep-awake is active. Your computer will stay on until the task is finished.</span>
+              <button className="notice-action" onClick={() => void changeAwake(false)} disabled={awakePending}>
+                Mark task finished
+              </button>
             </div>
           )}
 

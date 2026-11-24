@@ -1,6 +1,7 @@
 'use strict';
 
-const { app, BrowserWindow, ipcMain, screen, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, powerSaveBlocker, screen, shell } = require('electron');
+const { spawn } = require('node:child_process');
 const path = require('node:path');
 const { createSnapshot } = require('./system.cjs');
 const { startStaticServer } = require('./server.cjs');
@@ -17,6 +18,8 @@ if (process.platform === 'linux') {
 
 let mainWindow = null;
 let localServer = null;
+let awakeBlockerId = null;
+let inhibitProcess = null;
 
 function getDisplayInfo() {
   try {
@@ -81,8 +84,66 @@ async function createWindow() {
   }
 }
 
+function isAwake() {
+  return awakeBlockerId !== null || inhibitProcess !== null;
+}
+
+function setAwake(enabled) {
+  if (enabled) {
+    if (process.platform === 'linux') {
+      // Electron's "prevent-sleep" type is not accepted on Linux in current
+      // versions. systemd-inhibit holds a real suspend lock, while the display
+      // blocker keeps the screen from blanking.
+      if (!inhibitProcess) {
+        try {
+          inhibitProcess = spawn(
+            'systemd-inhibit',
+            [
+              '--what=sleep',
+              '--mode=block',
+              '--who=Stellaview',
+              '--why=Stellaview keep-awake task',
+              'sleep',
+              'infinity',
+            ],
+            { stdio: 'ignore' }
+          );
+          const clear = () => {
+            inhibitProcess = null;
+          };
+          inhibitProcess.once('exit', clear);
+          inhibitProcess.once('error', clear);
+        } catch {
+          inhibitProcess = null;
+        }
+      }
+      if (awakeBlockerId === null) {
+        try {
+          awakeBlockerId = powerSaveBlocker.start('prevent-display-sleep');
+        } catch {
+          awakeBlockerId = null;
+        }
+      }
+    } else if (awakeBlockerId === null) {
+      awakeBlockerId = powerSaveBlocker.start('prevent-sleep');
+    }
+  } else {
+    if (awakeBlockerId !== null) {
+      powerSaveBlocker.stop(awakeBlockerId);
+      awakeBlockerId = null;
+    }
+    if (inhibitProcess) {
+      inhibitProcess.kill();
+      inhibitProcess = null;
+    }
+  }
+  return isAwake();
+}
+
 function registerIpcHandlers() {
   ipcMain.handle('system:snapshot', () => createSnapshot(getDisplayInfo()));
+  ipcMain.handle('power:get', isAwake);
+  ipcMain.handle('power:set', (_event, enabled) => setAwake(Boolean(enabled)));
 
   ipcMain.on('window:minimize', () => {
     if (mainWindow) mainWindow.minimize();
@@ -108,7 +169,12 @@ app.whenReady().then(async () => {
   });
 });
 
+app.on('before-quit', () => {
+  setAwake(false);
+});
+
 app.on('window-all-closed', () => {
+  setAwake(false);
   if (localServer && localServer.server) localServer.server.close();
   if (process.platform !== 'darwin') app.quit();
 });

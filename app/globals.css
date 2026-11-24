@@ -196,6 +196,22 @@ button {
   }
 }
 
+.status-line.awake-status {
+  color: var(--accent);
+}
+
+.live-dot.awake {
+  background: var(--accent);
+  box-shadow: 0 0 0 4px rgba(129, 214, 237, 0.12), 0 0 14px rgba(129, 214, 237, 0.6);
+  animation: pulse-accent 2.2s ease-in-out infinite;
+}
+
+@keyframes pulse-accent {
+  50% {
+    box-shadow: 0 0 0 7px rgba(129, 214, 237, 0.04), 0 0 18px rgba(129, 214, 237, 0.4);
+  }
+}
+
 .sidebar-note {
   margin-top: 8px;
   font-size: 10px;
@@ -287,6 +303,69 @@ button {
 .window-btn.close:hover {
   background: #e81123;
   color: #fff;
+}
+
+.awake-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 9px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: rgba(9, 13, 34, 0.6);
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 11px;
+  white-space: nowrap;
+  -webkit-app-region: no-drag;
+  transition: color 140ms ease, border-color 140ms ease, background 140ms ease;
+}
+
+.awake-toggle:hover {
+  color: var(--text);
+  border-color: var(--line-strong);
+}
+
+.awake-toggle.active {
+  color: #07111f;
+  border-color: transparent;
+  background: linear-gradient(90deg, var(--accent), #b6edf8);
+  font-weight: 650;
+}
+
+.awake-toggle:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+.switch {
+  position: relative;
+  width: 26px;
+  height: 14px;
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.16);
+  transition: background 160ms ease;
+}
+
+.switch-knob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #fff;
+  transition: transform 160ms ease, background 160ms ease;
+}
+
+.awake-toggle.active .switch {
+  background: rgba(7, 17, 31, 0.28);
+}
+
+.awake-toggle.active .switch-knob {
+  background: #07111f;
+  transform: translateX(12px);
 }
 
 /* macOS keeps its native traffic lights, so hide the custom controls. */
@@ -430,6 +509,34 @@ button {
   background: rgba(251, 191, 36, 0.07);
   color: #f8d99a;
   font-size: 12px;
+}
+
+.notice.awake-notice {
+  border-color: rgba(129, 214, 237, 0.34);
+  background: rgba(129, 214, 237, 0.08);
+  color: #cfedf7;
+}
+
+.notice-action {
+  margin-left: auto;
+  padding: 6px 11px;
+  border: 1px solid rgba(129, 214, 237, 0.35);
+  border-radius: 8px;
+  background: rgba(129, 214, 237, 0.14);
+  color: var(--text);
+  cursor: pointer;
+  font-size: 11px;
+  white-space: nowrap;
+  transition: background 140ms ease;
+}
+
+.notice-action:hover {
+  background: rgba(129, 214, 237, 0.24);
+}
+
+.notice-action:disabled {
+  opacity: 0.6;
+  cursor: wait;
 }
 
 .section-heading {

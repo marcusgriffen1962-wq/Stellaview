@@ -13,8 +13,11 @@ Your logo is used as the app icon, the window/taskbar icon, the sidebar brand ma
 - **Thermal & fans** — temperature sensors and fan RPM where the hardware exposes them
 - **Hardware** — GPU, motherboard, BIOS, kernel, architecture, display, battery
 - **Processes** — top CPU consumers
+- **Keep-awake switch** — uses the OS power-save blocker to prevent sleep while a task is running, with a “Mark task finished” button to release it
 
 Readings refresh every two seconds. All telemetry is collected locally; Stellaview has no cloud services.
+
+> **Keep-awake note:** The lock is active only while Stellaview is running. Closing the app releases it automatically. It is not restored on the next launch, so your computer cannot be left awake indefinitely by accident.
 
 > **Fan speed note:** Many Mini PCs and laptops do not expose fan RPM to Linux (`/sys/class/hwmon`). When that happens, Stellaview shows a clear "not exposed by hardware" message instead of inventing a value.
 
