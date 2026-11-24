@@ -6,11 +6,14 @@ const { createSnapshot } = require('./system.cjs');
 const { startStaticServer } = require('./server.cjs');
 
 const isDev = process.env.STELLAVIEW_DEV === '1';
+const isMac = process.platform === 'darwin';
 
-// A dashboard does not need GPU acceleration, and software rendering keeps the
-// window reliable on headless/virtual displays as well as normal desktops.
-app.disableHardwareAcceleration();
-app.commandLine.appendSwitch('disable-gpu-sandbox');
+// A dashboard does not need GPU acceleration. On Linux, software rendering and
+// a relaxed GPU sandbox keep the window reliable on virtual displays too.
+if (process.platform === 'linux') {
+  app.disableHardwareAcceleration();
+  app.commandLine.appendSwitch('disable-gpu-sandbox');
+}
 
 let mainWindow = null;
 let localServer = null;
@@ -30,14 +33,14 @@ function getDisplayInfo() {
 
 async function createWindow() {
   const display = screen.getPrimaryDisplay();
-  const iconPath = path.join(app.getAppPath(), 'build', 'icon.png');
+  const iconFile = isMac ? 'icon.icns' : process.platform === 'win32' ? 'icon.ico' : 'icon.png';
+  const iconPath = path.join(app.getAppPath(), 'build', iconFile);
 
-  mainWindow = new BrowserWindow({
+  const windowOptions = {
     width: Math.min(1560, display.workAreaSize.width - 80),
     height: Math.min(960, display.workAreaSize.height - 80),
     minWidth: 1080,
     minHeight: 700,
-    frame: false,
     show: false,
     backgroundColor: '#080b1f',
     icon: iconPath,
@@ -47,6 +50,17 @@ async function createWindow() {
       nodeIntegration: false,
       sandbox: false,
     },
+  };
+
+  mainWindow = new BrowserWindow({
+    ...windowOptions,
+    ...(isMac
+      ? {
+          frame: true,
+          titleBarStyle: 'hiddenInset',
+          trafficLightPosition: { x: 16, y: 16 },
+        }
+      : { frame: false }),
   });
 
   mainWindow.on('ready-to-show', () => {

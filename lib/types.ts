@@ -94,6 +94,7 @@ declare global {
   interface Window {
     electronAPI?: {
       getSnapshot: () => Promise<SystemSnapshot>;
+      platform: 'linux' | 'win32' | 'darwin';
       windowControls: {
         minimize: () => void;
         maximize: () => void;

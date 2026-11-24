@@ -34,7 +34,18 @@ function safeExec(command, args, timeout = 1500) {
   }
 }
 
+function runPowerShell(command) {
+  return safeExec('powershell', ['-NoProfile', '-NonInteractive', '-Command', command], 3000);
+}
+
 function parseOsRelease() {
+  if (process.platform === 'darwin') {
+    const version = safeExec('sw_vers', ['-productVersion'], 1500);
+    return version ? `macOS ${version}` : `macOS ${os.release()}`;
+  }
+  if (process.platform === 'win32') {
+    return `Windows ${os.release()}`;
+  }
   const raw = readFile('/etc/os-release');
   const result = {};
   for (const line of raw.split('\n')) {
@@ -118,6 +129,7 @@ function readNetDev() {
 function getNetwork() {
   const now = Date.now();
   const raw = readNetDev();
+  const hasLinuxCounters = Object.keys(raw).length > 0;
   const addressMap = new Map();
   for (const [name, entries] of Object.entries(os.networkInterfaces())) {
     addressMap.set(
@@ -134,9 +146,23 @@ function getNetwork() {
   let totalRx = 0;
   let totalTx = 0;
 
-  const interfaces = Object.entries(raw)
-    .filter(([name]) => name !== 'lo' && !name.startsWith('virbr') && !name.startsWith('sit'))
-    .map(([name, counters]) => {
+  let names;
+  if (hasLinuxCounters) {
+    names = Object.keys(raw).filter(
+      (name) => name !== 'lo' && !name.startsWith('virbr') && !name.startsWith('sit')
+    );
+  } else {
+    // Windows and macOS do not expose /proc/net/dev. Show the interfaces that
+    // Node can see, with zeroed counters until a platform collector is added.
+    names = Object.keys(os.networkInterfaces()).filter((name) => !name.startsWith('lo'));
+  }
+
+  const interfaces = names
+    .map((name) => {
+      const counters = hasLinuxCounters
+        ? raw[name]
+        : { rxBytes: 0, txBytes: 0 };
+      if (!counters) return null;
       const previous = previousNet && previousNet.interfaces[name];
       const rxDelta = previous ? Math.max(0, counters.rxBytes - previous.rxBytes) : 0;
       const txDelta = previous ? Math.max(0, counters.txBytes - previous.txBytes) : 0;
@@ -147,6 +173,7 @@ function getNetwork() {
       downloadBps += downloadSpeed;
       uploadBps += uploadSpeed;
       const address = addressMap.get(name);
+      const entries = os.networkInterfaces()[name] || [];
       return {
         name,
         ip: address ? address.address : '—',
@@ -155,9 +182,14 @@ function getNetwork() {
         txBytes: counters.txBytes,
         downloadBps: downloadSpeed,
         uploadBps: uploadSpeed,
-        state: readFile(`/sys/class/net/${name}/operstate`) || 'unknown',
+        state: hasLinuxCounters
+          ? readFile(`/sys/class/net/${name}/operstate`) || 'unknown'
+          : entries.some((entry) => !entry.internal)
+            ? 'up'
+            : 'down',
       };
     })
+    .filter(Boolean)
     .sort((a, b) => b.rxBytes + b.txBytes - (a.rxBytes + a.txBytes));
 
   previousNet = { time: now, interfaces: raw };
@@ -165,11 +197,24 @@ function getNetwork() {
 }
 
 function getDisks() {
-  const targets = [
-    { mount: '/', label: 'System' },
-    { mount: '/home', label: 'Home' },
-    { mount: '/tmp', label: 'Temp' },
-  ];
+  let targets;
+  if (process.platform === 'win32') {
+    targets = [
+      { mount: 'C:\\', label: 'System' },
+      { mount: 'D:\\', label: 'Data' },
+    ];
+  } else if (process.platform === 'darwin') {
+    targets = [
+      { mount: '/', label: 'System' },
+      { mount: '/System/Volumes/Data', label: 'Data' },
+    ];
+  } else {
+    targets = [
+      { mount: '/', label: 'System' },
+      { mount: '/home', label: 'Home' },
+      { mount: '/tmp', label: 'Temp' },
+    ];
+  }
   const seen = new Set();
   const result = [];
 
@@ -290,6 +335,20 @@ function getTemperatures() {
 }
 
 function getGpu() {
+  if (process.platform === 'darwin') {
+    const output = safeExec('system_profiler', ['SPDisplaysDataType'], 3000);
+    const line = output.split('\n').find((entry) => /chipset|vendor|device id/i.test(entry));
+    if (!line) return 'Apple GPU';
+    return line.split(':').slice(1).join(':').trim() || 'Apple GPU';
+  }
+
+  if (process.platform === 'win32') {
+    const output = runPowerShell(
+      'Get-CimInstance Win32_VideoController | Select-Object -First 1 -ExpandProperty Name'
+    );
+    return output.trim().split('\n')[0] || 'Not detected';
+  }
+
   const output = safeExec('lspci', ['-nn']);
   const line = output
     .split('\n')
@@ -299,11 +358,33 @@ function getGpu() {
     .replace(/^[^:]+:\s*/, '')
     .replace(/^(vga compatible controller|3d controller|display controller)\s*\[[^\]]+\]\s*:\s*/i, '')
     .replace(/\s*\[[0-9a-f]{4}:[0-9a-f]{4}\]\s*/gi, '')
+    .replace(/\s*\([^)]*\)\s*/g, ' ')
     .replace(/\s+/g, ' ')
     .trim() || 'Graphics controller';
 }
 
 function getBoard() {
+  if (process.platform === 'darwin') {
+    return {
+      vendor: 'Apple',
+      product: safeExec('sysctl', ['-n', 'hw.model']) || 'Mac',
+      bios: safeExec('sysctl', ['-n', 'kern.osversion']) || 'Unknown',
+    };
+  }
+
+  if (process.platform === 'win32') {
+    const output = runPowerShell(
+      '$c = Get-CimInstance Win32_ComputerSystem; $b = Get-CimInstance Win32_BIOS; ' +
+        '"$($c.Manufacturer)|$($c.Model)|$($b.SMBIOSBIOSVersion)"'
+    );
+    const [vendor, product, bios] = output.split('|').map((value) => value.trim());
+    return {
+      vendor: vendor || 'Unknown',
+      product: product || 'Unknown',
+      bios: bios || 'Unknown',
+    };
+  }
+
   const base = '/sys/class/dmi/id';
   return {
     vendor: readFile(path.join(base, 'sys_vendor')) || 'Unknown',
@@ -313,6 +394,41 @@ function getBoard() {
 }
 
 function getBattery() {
+  if (process.platform === 'darwin') {
+    const output = safeExec('pmset', ['-g', 'batt']);
+    const match = output.match(/(\d+)%/);
+    if (!match) return null;
+    const status = /discharging/i.test(output)
+      ? 'Discharging'
+      : /charging/i.test(output)
+        ? 'Charging'
+        : /fully charged/i.test(output)
+          ? 'Fully charged'
+          : 'Unknown';
+    return { capacity: clamp(Number(match[1]), 0, 100), status };
+  }
+
+  if (process.platform === 'win32') {
+    const output = runPowerShell(
+      '$b = Get-CimInstance Win32_Battery | Select-Object -First 1; ' +
+        'if ($b) { "$($b.EstimatedChargeRemaining)|$($b.BatteryStatus)" }'
+    );
+    if (!output.trim()) return null;
+    const [capacity, code] = output.trim().split('|');
+    const statuses = {
+      1: 'Discharging',
+      2: 'On AC power',
+      3: 'Fully charged',
+      4: 'Low',
+      5: 'Charging',
+      6: 'Unknown',
+    };
+    return {
+      capacity: clamp(Number(capacity) || 0, 0, 100),
+      status: statuses[Number(code)] || 'Unknown',
+    };
+  }
+
   let names = [];
   try {
     names = fs.readdirSync('/sys/class/power_supply').filter((name) => name.startsWith('BAT'));
@@ -329,17 +445,56 @@ function getBattery() {
   };
 }
 
+function parseCsvLine(line) {
+  const quoted = line.match(/"([^"]*)"/g);
+  if (quoted && quoted.length) return quoted.map((value) => value.slice(1, -1));
+  return line.split(',').map((value) => value.trim());
+}
+
 function getProcesses() {
-  const output = safeExec('ps', ['-eo', 'pid,comm,pcpu,pmem,rss', '--sort=-pcpu', '--no-headers']);
+  if (process.platform === 'win32') {
+    const output = runPowerShell(
+      'Get-CimInstance Win32_PerfFormattedData_PerfProc_Process | ' +
+        'Where-Object { $_.Name -ne "_Total" -and $_.Name -ne "Idle" } | ' +
+        'Sort-Object PercentProcessorTime -Descending | Select-Object -First 8 ' +
+        'Name,IDProcess,PercentProcessorTime,WorkingSetPrivate | ConvertTo-Csv -NoTypeInformation'
+    );
+    return output
+      .split('\n')
+      .slice(1, 9)
+      .map((line) => {
+        const fields = parseCsvLine(line);
+        if (fields.length < 4) return null;
+        const pid = Number(fields[1]);
+        if (!Number.isFinite(pid)) return null;
+        return {
+          pid,
+          name: fields[0],
+          cpu: Number(fields[2]) || 0,
+          memory: 0,
+          rss: Number(fields[3]) || 0,
+        };
+      })
+      .filter(Boolean);
+  }
+
+  const isMac = process.platform === 'darwin';
+  const output = isMac
+    ? safeExec('ps', ['-eo', 'pid,comm,pcpu,pmem,rss', '-r'])
+    : safeExec('ps', ['-eo', 'pid,comm,pcpu,pmem,rss', '--sort=-pcpu', '--no-headers']);
   if (!output) return [];
+
   return output
     .split('\n')
+    .filter((line) => !/^\s*PID\s/.test(line))
     .slice(0, 8)
     .map((line) => {
       const parts = line.trim().split(/\s+/);
       if (parts.length < 5) return null;
+      const pid = Number(parts[0]);
+      if (!Number.isFinite(pid)) return null;
       return {
-        pid: Number(parts[0]),
+        pid,
         name: parts[1],
         cpu: Number(parts[2]) || 0,
         memory: Number(parts[3]) || 0,

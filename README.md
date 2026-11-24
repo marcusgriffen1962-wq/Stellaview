@@ -36,18 +36,40 @@ npm start         # opens the exported app in Electron
 
 ## Standalone installers / desktop shortcut
 
+### Linux
+
 ```bash
 npm run dist:linux
 ```
 
-This produces installers in `dist/`:
-
 - `Stellaview-1.0.0-x86_64.AppImage` — portable standalone app
 - `stellaview_1.0.0_amd64.deb` — Debian/Ubuntu package
 
-The `.deb` installs a desktop shortcut with `Terminal=false`, so Stellaview launches as a normal GUI application. The AppImage can be made permanent with a launcher such as AppImageLauncher, or by creating a `.desktop` entry pointing at it.
+The `.deb` installs a desktop shortcut with `Terminal=false`, so Stellaview launches as a normal GUI application.
 
-The icon used for both the window and desktop shortcut is `build/icon.png` (converted from your logo to a true PNG).
+### Windows
+
+```bash
+npm run dist:win
+```
+
+- `Stellaview-Setup-1.0.0.exe` — NSIS installer with desktop and Start menu shortcuts
+- `Stellaview-1.0.0-win-x64.zip` — portable zip
+
+On Linux, the NSIS step needs Wine. Use `npm run dist:win:zip` to produce just the portable zip without Wine; GitHub's Windows runner builds the installer natively.
+
+### macOS
+
+```bash
+npm run dist:mac
+```
+
+- `Stellaview-1.0.0-mac-universal.dmg` — universal Apple Silicon + Intel DMG
+- `Stellaview-1.0.0-mac-universal.zip` — portable zip
+
+macOS packages can only be built on macOS. The release workflow uses a GitHub macOS runner. These builds are unsigned, so macOS may ask you to right-click and choose **Open** the first time. Add an Apple Developer certificate to `mac.identity` and notarization if you need a fully signed app.
+
+Icons are derived from your logo: `build/icon.png` (Linux), `build/icon.ico` (Windows), and `build/icon.icns` (macOS).
 
 ## Project layout
 
@@ -61,12 +83,27 @@ electron/
   system.cjs      OS telemetry collectors
   server.cjs      Tiny local HTTP server for the static export
 public/logo.png   Your logo, served to the UI
-build/icon.png    Your logo as the desktop/window icon
+build/icon.png    Linux window/desktop icon
+build/icon.ico    Windows window/taskbar/installer icon
+build/icon.icns   macOS app/dock icon
 ```
 
 ## Replacing the logo
 
-Replace `public/logo.png` and `build/icon.png` with a square PNG of your logo, then rebuild. The UI will pick it up from `public/logo.png` without any code changes.
+Replace `public/logo.png` with a square PNG of your logo. Then regenerate the platform icons from it:
+
+```bash
+python3 - <<'PY'
+from PIL import Image
+img = Image.open('public/logo.png').convert('RGBA')
+img.save('build/icon.png', 'PNG', optimize=True)
+img.save('build/icon.ico', format='ICO', sizes=[(16,16),(32,32),(48,48),(64,64),(128,128),(256,256)])
+img.save('build/icon.icns', format='ICNS')
+PY
+```
+
+The UI picks up `public/logo.png` without any code changes.
+
 
 ## Publishing to GitHub
 
@@ -78,7 +115,7 @@ git branch -M main
 git push -u origin main
 ```
 
-Pushing a tag such as `v1.0.0` triggers the release workflow, which builds the AppImage and `.deb` and attaches them to a GitHub Release:
+Pushing a tag such as `v1.0.0` triggers the release workflow, which builds the Linux, Windows, and macOS installers on their native runners and attaches all of them to a GitHub Release:
 
 ```bash
 git tag v1.0.0
@@ -94,8 +131,8 @@ git push origin v1.0.0
 | `SECURITY.md` | Security policy and private reporting |
 | `.gitignore` | Keeps dependencies and build artifacts out of git |
 | `.gitattributes` | Consistent line endings and binary handling for the logo |
-| `.github/workflows/ci.yml` | Typecheck, build, and smoke test on pushes/PRs |
-| `.github/workflows/release.yml` | Builds and publishes installers for `v*` tags |
+| `.github/workflows/ci.yml` | Typecheck, build, and smoke test on Linux, Windows, and macOS |
+| `.github/workflows/release.yml` | Builds Linux, Windows, and macOS installers for `v*` tags |
 | `.github/ISSUE_TEMPLATE/` | Bug report and feature request forms |
 | `.github/PULL_REQUEST_TEMPLATE.md` | PR checklist |
 

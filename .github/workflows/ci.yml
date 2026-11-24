@@ -10,8 +10,12 @@ permissions:
 
 jobs:
   verify:
-    name: Typecheck, build, and smoke test
-    runs-on: ubuntu-latest
+    name: Verify on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
 
     steps:
       - name: Check out repository
@@ -37,4 +41,5 @@ jobs:
           node -e "require('./electron/system.cjs').createSnapshot()"
 
       - name: Verify exported app
-        run: test -f out/index.html && test -f out/logo.png
+        run: |
+          node -e "const fs=require('fs'); if(!fs.existsSync('out/index.html')||!fs.existsSync('out/logo.png')) process.exit(1)"

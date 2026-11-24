@@ -19,7 +19,10 @@
     "typecheck": "tsc --noEmit",
     "dist": "npm run build && electron-builder",
     "dist:linux": "npm run build && electron-builder --linux",
-    "dist:appimage": "npm run build && electron-builder --linux AppImage"
+    "dist:appimage": "npm run build && electron-builder --linux AppImage",
+    "dist:win": "npm run build && electron-builder --win",
+    "dist:win:zip": "npm run build && electron-builder --win zip",
+    "dist:mac": "npm run build && electron-builder --mac"
   },
   "dependencies": {
     "lucide-react": "^0.468.0",
@@ -76,6 +79,58 @@
     },
     "deb": {
       "artifactName": "stellaview_${version}_amd64.deb"
+    },
+    "win": {
+      "icon": "build/icon.ico",
+      "target": [
+        "nsis",
+        "zip"
+      ],
+      "artifactName": "Stellaview-${version}-win-${arch}.${ext}"
+    },
+    "nsis": {
+      "artifactName": "Stellaview-Setup-${version}.${ext}",
+      "oneClick": false,
+      "perMachine": false,
+      "allowElevation": true,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Stellaview",
+      "deleteAppDataOnUninstall": false,
+      "runAfterFinish": true
+    },
+    "mac": {
+      "icon": "build/icon.icns",
+      "category": "public.app-category.utilities",
+      "minimumSystemVersion": "11.0.0",
+      "identity": null,
+      "target": [
+        { "target": "dmg", "arch": "universal" },
+        { "target": "zip", "arch": "universal" }
+      ],
+      "artifactName": "Stellaview-${version}-mac-${arch}.${ext}"
+    },
+    "dmg": {
+      "title": "Stellaview ${version}",
+      "icon": "build/icon.icns",
+      "iconSize": 100,
+      "contents": [
+        {
+          "x": 130,
+          "y": 220
+        },
+        {
+          "x": 410,
+          "y": 220,
+          "type": "link",
+          "path": "/Applications"
+        }
+      ],
+      "window": {
+        "width": 540,
+        "height": 380
+      }
     }
   }
 }

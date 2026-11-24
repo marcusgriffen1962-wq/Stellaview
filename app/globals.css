@@ -289,6 +289,15 @@ button {
   color: #fff;
 }
 
+/* macOS keeps its native traffic lights, so hide the custom controls. */
+.platform-darwin .titlebar {
+  padding-left: 84px;
+}
+
+.platform-darwin .window-controls {
+  display: none;
+}
+
 /* Content */
 
 .content {

@@ -27,6 +27,8 @@ npm run typecheck
 npm run build
 ```
 
+CI runs these on Linux, Windows, and macOS. If you change packaging, also test the platform you can access locally. macOS installers can only be built on macOS; `npm run dist:win:zip` builds the Windows zip from Linux without needing Wine.
+
 If you changed system telemetry, verify it against a real machine:
 
 ```bash

@@ -178,6 +178,7 @@ export default function Dashboard() {
   const [refreshing, setRefreshing] = useState(false);
   const [isDemo, setIsDemo] = useState(true);
   const [clock, setClock] = useState<Date | null>(null);
+  const [platform, setPlatform] = useState<'linux' | 'win32' | 'darwin' | 'browser'>('browser');
 
   const refresh = useCallback(async () => {
     let next: SystemSnapshot;
@@ -205,6 +206,7 @@ export default function Dashboard() {
 
   useEffect(() => {
     let mounted = true;
+    if (window.electronAPI) setPlatform(window.electronAPI.platform);
     const run = async () => {
       if (!mounted) return;
       setRefreshing(true);
@@ -234,7 +236,7 @@ export default function Dashboard() {
   const topFan = snapshot.fans.length ? snapshot.fans[0] : null;
 
   return (
-    <div className="app-shell">
+    <div className={`app-shell platform-${platform}`}>
       <aside className="sidebar">
         <div className="brand">
           <div className="brand-mark">
