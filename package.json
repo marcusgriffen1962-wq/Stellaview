@@ -1,0 +1,81 @@
+{
+  "name": "stellaview",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Stellaview — a standalone desktop system intelligence dashboard",
+  "author": {
+    "name": "Stellaview",
+    "email": "support@stellaview.local"
+  },
+  "homepage": "https://stellaview.local",
+  "desktopName": "Stellaview",
+  "main": "electron/main.cjs",
+  "scripts": {
+    "dev": "concurrently -k \"next dev -p 3000\" \"wait-on http://127.0.0.1:3000 && cross-env STELLAVIEW_DEV=1 electron .\"",
+    "dev:next": "next dev -p 3000",
+    "dev:electron": "cross-env STELLAVIEW_DEV=1 electron .",
+    "build": "next build",
+    "start": "electron .",
+    "typecheck": "tsc --noEmit",
+    "dist": "npm run build && electron-builder",
+    "dist:linux": "npm run build && electron-builder --linux",
+    "dist:appimage": "npm run build && electron-builder --linux AppImage"
+  },
+  "dependencies": {
+    "lucide-react": "^0.468.0",
+    "next": "^15.5.4",
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "@types/react": "^19.0.2",
+    "@types/react-dom": "^19.0.2",
+    "concurrently": "^9.1.0",
+    "cross-env": "^7.0.3",
+    "electron": "^38.1.0",
+    "electron-builder": "^26.0.12",
+    "typescript": "^5.7.2",
+    "wait-on": "^8.0.1"
+  },
+  "build": {
+    "appId": "com.stellaview.app",
+    "productName": "Stellaview",
+    "copyright": "Copyright © 2026 Stellaview",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "electron/**/*",
+      "out/**/*",
+      "package.json"
+    ],
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "icon": "build/icon.png",
+      "category": "Utility",
+      "maintainer": "Stellaview <support@stellaview.local>",
+      "syncDesktopName": true,
+      "desktop": {
+        "entry": {
+          "Name": "Stellaview",
+          "Comment": "System intelligence dashboard",
+          "Terminal": "false",
+          "StartupNotify": "true"
+        }
+      },
+      "synopsis": "A beautiful all-in-one system dashboard",
+      "description": "Live CPU, memory, disk, network, fan, sensor and process information in one standalone desktop app."
+    },
+    "appImage": {
+      "artifactName": "Stellaview-${version}-x86_64.AppImage"
+    },
+    "deb": {
+      "artifactName": "stellaview_${version}_amd64.deb"
+    }
+  }
+}
