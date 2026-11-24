@@ -126,10 +126,61 @@ function readNetDev() {
   return result;
 }
 
+function readNetworkCounters() {
+  if (process.platform === 'darwin') {
+    const output = safeExec('netstat', ['-ib']);
+    const lines = output.split('\n').filter((line) => line.trim());
+    if (lines.length > 1) {
+      const header = lines[0].trim().split(/\s+/);
+      const rxIndex = header.indexOf('Ibytes');
+      const txIndex = header.indexOf('Obytes');
+      const counters = {};
+      if (rxIndex !== -1 && txIndex !== -1) {
+        for (const line of lines.slice(1)) {
+          const fields = line.trim().split(/\s+/);
+          if (fields.length <= Math.max(rxIndex, txIndex)) continue;
+          const rxBytes = Number(fields[rxIndex]);
+          const txBytes = Number(fields[txIndex]);
+          if (!Number.isFinite(rxBytes) || !Number.isFinite(txBytes)) continue;
+          counters[fields[0]] = { rxBytes, txBytes };
+        }
+      }
+      if (Object.keys(counters).length) {
+        return { counters, hasCounters: true, source: 'darwin' };
+      }
+    }
+  }
+
+  if (process.platform === 'win32') {
+    const output = runPowerShell(
+      'Get-NetAdapterStatistics | Select-Object Name,ReceivedBytes,SentBytes | ConvertTo-Csv -NoTypeInformation'
+    );
+    const counters = {};
+    for (const line of output.split('\n').slice(1)) {
+      if (!line.trim()) continue;
+      const fields = parseCsvLine(line);
+      if (fields.length < 3) continue;
+      const rxBytes = Number(fields[1]);
+      const txBytes = Number(fields[2]);
+      if (!Number.isFinite(rxBytes) || !Number.isFinite(txBytes)) continue;
+      counters[fields[0]] = { rxBytes, txBytes };
+    }
+    if (Object.keys(counters).length) {
+      return { counters, hasCounters: true, source: 'win32' };
+    }
+  }
+
+  const counters = readNetDev();
+  return {
+    counters,
+    hasCounters: Object.keys(counters).length > 0,
+    source: 'linux',
+  };
+}
+
 function getNetwork() {
   const now = Date.now();
-  const raw = readNetDev();
-  const hasLinuxCounters = Object.keys(raw).length > 0;
+  const { counters: raw, hasCounters, source } = readNetworkCounters();
   const addressMap = new Map();
   for (const [name, entries] of Object.entries(os.networkInterfaces())) {
     addressMap.set(
@@ -147,29 +198,25 @@ function getNetwork() {
   let totalTx = 0;
 
   let names;
-  if (hasLinuxCounters) {
+  if (hasCounters) {
     names = Object.keys(raw).filter(
       (name) => name !== 'lo' && !name.startsWith('virbr') && !name.startsWith('sit')
     );
   } else {
-    // Windows and macOS do not expose /proc/net/dev. Show the interfaces that
-    // Node can see, with zeroed counters until a platform collector is added.
     names = Object.keys(os.networkInterfaces()).filter((name) => !name.startsWith('lo'));
   }
 
   const interfaces = names
     .map((name) => {
-      const counters = hasLinuxCounters
-        ? raw[name]
-        : { rxBytes: 0, txBytes: 0 };
-      if (!counters) return null;
+      const ifaceCounters = raw[name];
+      if (!ifaceCounters) return null;
       const previous = previousNet && previousNet.interfaces[name];
-      const rxDelta = previous ? Math.max(0, counters.rxBytes - previous.rxBytes) : 0;
-      const txDelta = previous ? Math.max(0, counters.txBytes - previous.txBytes) : 0;
+      const rxDelta = previous ? Math.max(0, ifaceCounters.rxBytes - previous.rxBytes) : 0;
+      const txDelta = previous ? Math.max(0, ifaceCounters.txBytes - previous.txBytes) : 0;
       const downloadSpeed = elapsed ? rxDelta / elapsed : 0;
       const uploadSpeed = elapsed ? txDelta / elapsed : 0;
-      totalRx += counters.rxBytes;
-      totalTx += counters.txBytes;
+      totalRx += ifaceCounters.rxBytes;
+      totalTx += ifaceCounters.txBytes;
       downloadBps += downloadSpeed;
       uploadBps += uploadSpeed;
       const address = addressMap.get(name);
@@ -178,11 +225,11 @@ function getNetwork() {
         name,
         ip: address ? address.address : '—',
         mac: address && address.mac && address.mac !== '00:00:00:00:00:00' ? address.mac : '—',
-        rxBytes: counters.rxBytes,
-        txBytes: counters.txBytes,
+        rxBytes: ifaceCounters.rxBytes,
+        txBytes: ifaceCounters.txBytes,
         downloadBps: downloadSpeed,
         uploadBps: uploadSpeed,
-        state: hasLinuxCounters
+        state: source === 'linux'
           ? readFile(`/sys/class/net/${name}/operstate`) || 'unknown'
           : entries.some((entry) => !entry.internal)
             ? 'up'
