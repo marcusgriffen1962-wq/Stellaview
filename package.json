@@ -1,6 +1,6 @@
 {
   "name": "stellaview",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "private": true,
   "description": "Stellaview — a standalone desktop system intelligence dashboard",
   "author": {
@@ -106,8 +106,14 @@
       "minimumSystemVersion": "11.0.0",
       "identity": null,
       "target": [
-        { "target": "dmg", "arch": "universal" },
-        { "target": "zip", "arch": "universal" }
+        {
+          "target": "dmg",
+          "arch": "universal"
+        },
+        {
+          "target": "zip",
+          "arch": "universal"
+        }
       ],
       "artifactName": "Stellaview-${version}-mac-${arch}.${ext}"
     },

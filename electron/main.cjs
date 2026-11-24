@@ -38,12 +38,22 @@ function getDisplayInfo() {
 
 async function createWindow() {
   const display = screen.getPrimaryDisplay();
+  const area = display.workArea || {
+    x: 0,
+    y: 0,
+    width: display.workAreaSize.width,
+    height: display.workAreaSize.height,
+  };
+  const width = Math.min(1560, Math.max(1080, area.width - 80));
+  const height = Math.min(960, Math.max(700, area.height - 80));
   const iconFile = isMac ? 'icon.icns' : process.platform === 'win32' ? 'icon.ico' : 'icon.png';
   const iconPath = path.join(app.getAppPath(), 'build', iconFile);
 
   const windowOptions = {
-    width: Math.min(1560, display.workAreaSize.width - 80),
-    height: Math.min(960, display.workAreaSize.height - 80),
+    width,
+    height,
+    x: Math.round(area.x + (area.width - width) / 2),
+    y: Math.round(area.y + (area.height - height) / 2),
     minWidth: 1080,
     minHeight: 700,
     show: false,
@@ -65,7 +75,9 @@ async function createWindow() {
           titleBarStyle: 'hiddenInset',
           trafficLightPosition: { x: 16, y: 16 },
         }
-      : { frame: false }),
+      : process.platform === 'linux'
+        ? { frame: true }
+        : { frame: false }),
   });
 
   mainWindow.on('ready-to-show', () => {
